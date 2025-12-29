@@ -23,7 +23,7 @@ def save_db(data):
     with open(DB_FILE, 'w') as f:
         json.dump(data, f, indent=4)
 
-# --- ROUTES ---
+# --- ROUTES PRINCIPALES ---
 
 @app.route('/')
 def index():
@@ -33,6 +33,7 @@ def index():
     db = load_db()
     curr_u = session['user']['username']
     
+    # Filtrage des services (Propriétaire ou partagé avec l'utilisateur)
     user_services = [
         s for s in db['services'] 
         if s.get('owner') == curr_u or curr_u in s.get('shared_with', [])
@@ -68,26 +69,51 @@ def setup():
         return jsonify({'status': 'success'})
     return render_template('setup.html')
 
-@app.route('/login', methods=['GET', 'POST'])
+# --- SYSTEME DE LOGIN EN 2 ETAPES (MODALE) ---
+
+@app.route('/login')
 def login():
     if not db_exists(): return redirect(url_for('setup'))
+    return render_template('login.html', db=load_db())
+
+@app.route('/login_step1', methods=['POST'])
+def login_step1():
     db = load_db()
-    if request.method == 'POST':
-        idnt = request.form.get('identifier')
-        pwd = request.form.get('password')
-        user = next((u for u in db['users'] if (u['username'] == idnt or u.get('email') == idnt) and u['password'] == pwd), None)
-        if user:
+    ident = request.form.get('identifier')
+    pwd = request.form.get('password')
+    
+    user = next((u for u in db['users'] if (u['username'] == ident or u.get('email') == ident) and u['password'] == pwd), None)
+    
+    if user:
+        # On renvoie la question de sécurité pour la modale
+        question = user.get('security', {}).get('question', "Quelle est votre réponse secrète ?")
+        return jsonify({'status': 'success', 'question': question})
+    else:
+        return jsonify({'status': 'error', 'message': 'Identifiants ou mot de passe incorrects'})
+
+@app.route('/login_step2', methods=['POST'])
+def login_step2():
+    db = load_db()
+    ident = request.form.get('identifier')
+    answer = request.form.get('security_answer')
+    
+    user = next((u for u in db['users'] if u['username'] == ident or u.get('email') == ident), None)
+    
+    if user:
+        correct_ans = user.get('security', {}).get('answer', '').strip().lower()
+        if answer.strip().lower() == correct_ans:
             session['user'] = user
             return redirect(url_for('index'))
-        return render_template('login.html', error="Identifiants incorrects", db=db)
-    return render_template('login.html', db=db)
+            
+    return render_template('login.html', db=db, error="Réponse de sécurité incorrecte")
 
 @app.route('/logout')
 def logout():
     session.clear()
     return redirect(url_for('login'))
 
-# --- API ---
+# --- API DE GESTION ---
+
 @app.route('/add_service', methods=['POST'])
 def add_service():
     if 'user' not in session: return redirect(url_for('login'))
@@ -112,7 +138,7 @@ def delete_service():
     if 'user' not in session: return jsonify({'status': 'error'})
     data = request.json
     db = load_db()
-    # On ne laisse supprimer que si on est propriétaire ou Admin
+    # Suppression si Admin ou Propriétaire
     db['services'] = [s for s in db['services'] if s['id'] != data['id'] or (session['user']['role'] != 'ADMIN' and s['owner'] != session['user']['username'])]
     save_db(db)
     return jsonify({'status': 'success'})
@@ -127,7 +153,8 @@ def manage_users():
     if action == 'add' and session['user']['role'] == 'ADMIN':
         db['users'].append({
             "username": data['username'], "email": data['email'], "password": data['password'],
-            "role": data['role'], "avatar": f"https://api.dicebear.com/7.x/avataaars/svg?seed={data['username']}"
+            "role": data['role'], "avatar": f"https://api.dicebear.com/7.x/avataaars/svg?seed={data['username']}",
+            "security": {"question": "Question par défaut ?", "answer": "changez-moi"}
         })
     elif action == 'delete' and session['user']['role'] == 'ADMIN':
         db['users'] = [u for u in db['users'] if u['username'] != data['username']]
@@ -171,7 +198,8 @@ def update_password():
     db = load_db()
     new_p = request.json.get('password')
     for u in db['users']:
-        if u['username'] == session['user']['username']: u['password'] = new_p
+        if u['username'] == session['user']['username']: 
+            u['password'] = new_p
     save_db(db)
     return jsonify({'status': 'success'})
 
