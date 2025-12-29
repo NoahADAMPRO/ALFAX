@@ -23,7 +23,7 @@ def save_db(data):
     with open(DB_FILE, 'w') as f:
         json.dump(data, f, indent=4)
 
-# --- ROUTES PRINCIPALES ---
+# --- ROUTES ---
 
 @app.route('/')
 def index():
@@ -33,7 +33,6 @@ def index():
     db = load_db()
     curr_u = session['user']['username']
     
-    # Filtrage : services dont l'utilisateur est propriétaire ou qui sont partagés avec lui
     user_services = [
         s for s in db['services'] 
         if s.get('owner') == curr_u or curr_u in s.get('shared_with', [])
@@ -47,7 +46,6 @@ def index():
 @app.route('/setup', methods=['GET', 'POST'])
 def setup():
     if db_exists(): return redirect(url_for('login'))
-
     if request.method == 'POST':
         data = request.json
         admin_data = {
@@ -62,22 +60,17 @@ def setup():
                 "password": data.get('password'),
                 "role": "ADMIN",
                 "avatar": data.get('avatar'),
-                "security": {
-                    "question": data.get('question'),
-                    "answer": data.get('answer')
-                }
+                "security": {"question": data.get('question'), "answer": data.get('answer')}
             }],
             "services": []
         }
         save_db(admin_data)
         return jsonify({'status': 'success'})
-
     return render_template('setup.html')
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if not db_exists(): return redirect(url_for('setup'))
-    
     db = load_db()
     if request.method == 'POST':
         idnt = request.form.get('identifier')
@@ -94,16 +87,11 @@ def logout():
     session.clear()
     return redirect(url_for('login'))
 
-# --- GESTION DES SERVICES ---
-
+# --- API ---
 @app.route('/add_service', methods=['POST'])
 def add_service():
-    if 'user' not in session: 
-        return redirect(url_for('login'))
-    
+    if 'user' not in session: return redirect(url_for('login'))
     db = load_db()
-    
-    # Création de l'objet service avec un ID unique basé sur le timestamp
     new_service = {
         "id": str(int(time.time())),
         "name": request.form.get('name'),
@@ -115,13 +103,19 @@ def add_service():
         "owner": session['user']['username'],
         "shared_with": []
     }
-    
     db['services'].append(new_service)
     save_db(db)
-    
     return redirect(url_for('index'))
 
-# --- API UTILISATEURS & RÉGLAGES ---
+@app.route('/api/delete_service', methods=['POST'])
+def delete_service():
+    if 'user' not in session: return jsonify({'status': 'error'})
+    data = request.json
+    db = load_db()
+    # On ne laisse supprimer que si on est propriétaire ou Admin
+    db['services'] = [s for s in db['services'] if s['id'] != data['id'] or (session['user']['role'] != 'ADMIN' and s['owner'] != session['user']['username'])]
+    save_db(db)
+    return jsonify({'status': 'success'})
 
 @app.route('/api/manage_users', methods=['POST'])
 def manage_users():
@@ -132,11 +126,8 @@ def manage_users():
     
     if action == 'add' and session['user']['role'] == 'ADMIN':
         db['users'].append({
-            "username": data['username'],
-            "email": data['email'],
-            "password": data['password'],
-            "role": data['role'],
-            "avatar": f"https://api.dicebear.com/7.x/avataaars/svg?seed={data['username']}"
+            "username": data['username'], "email": data['email'], "password": data['password'],
+            "role": data['role'], "avatar": f"https://api.dicebear.com/7.x/avataaars/svg?seed={data['username']}"
         })
     elif action == 'delete' and session['user']['role'] == 'ADMIN':
         db['users'] = [u for u in db['users'] if u['username'] != data['username']]
@@ -160,11 +151,9 @@ def share_service():
     db = load_db()
     target_user = next((u for u in db['users'] if u['username'] == data['target'] or u.get('email') == data['target']), None)
     if not target_user: return jsonify({'error': 'Utilisateur introuvable'})
-    
     for s in db['services']:
-        if s['id'] == data['service_id']:
-            if target_user['username'] not in s['shared_with']:
-                s['shared_with'].append(target_user['username'])
+        if s['id'] == data['service_id'] and target_user['username'] not in s['shared_with']:
+            s['shared_with'].append(target_user['username'])
     save_db(db)
     return jsonify({'status': 'success'})
 
@@ -182,13 +171,11 @@ def update_password():
     db = load_db()
     new_p = request.json.get('password')
     for u in db['users']:
-        if u['username'] == session['user']['username']:
-            u['password'] = new_p
+        if u['username'] == session['user']['username']: u['password'] = new_p
     save_db(db)
     return jsonify({'status': 'success'})
 
 # --- SSH SOCKET ---
-
 def listen_to_ssh(sid, chan):
     while True:
         try:
