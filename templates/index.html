@@ -42,7 +42,6 @@
     </aside>
 
     <main class="flex-1 p-10 overflow-y-auto">
-        
         <div id="view-dash" class="view-section">
             <div class="flex justify-between items-center mb-8">
                 <h2 class="text-4xl font-black">Dashboard</h2>
@@ -51,11 +50,18 @@
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {% for s in services %}
                 <div class="group relative bg-white dark:bg-gray-800 p-6 rounded-[2rem] border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-xl transition-all cursor-pointer">
-                    {% if user.role == 'ADMIN' %}
-                    <button onclick="event.stopPropagation(); openShareModal('{{s.id}}')" class="absolute top-4 right-4 p-2 opacity-0 group-hover:opacity-100 bg-gray-50 dark:bg-gray-700 rounded-full transition hover:rotate-90">
-                        <i data-lucide="share-2" class="w-4 h-4 text-blue-500"></i>
-                    </button>
-                    {% endif %}
+                    <div class="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                        {% if user.role == 'ADMIN' %}
+                        <button onclick="event.stopPropagation(); openShareModal('{{s.id}}')" class="p-2 bg-blue-50 dark:bg-gray-700 rounded-full hover:rotate-90 transition">
+                            <i data-lucide="share-2" class="w-4 h-4 text-blue-500"></i>
+                        </button>
+                        {% endif %}
+                        {% if user.role == 'ADMIN' or s.owner == user.username %}
+                        <button onclick="event.stopPropagation(); deleteService('{{s.id}}')" class="p-2 bg-red-50 dark:bg-gray-700 rounded-full hover:scale-110 transition">
+                            <i data-lucide="trash-2" class="w-4 h-4 text-red-500"></i>
+                        </button>
+                        {% endif %}
+                    </div>
                     <div onclick="launchService('{{s.type}}', '{{s.url_or_ip}}', '{{s.name}}', '{{s.ssh_user}}', '{{s.ssh_pass}}')">
                         <div class="p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-600 w-fit rounded-2xl mb-4"><i data-lucide="{{ s.icon }}"></i></div>
                         <h3 class="text-xl font-bold">{{ s.name }}</h3>
@@ -85,9 +91,14 @@
                             <td class="p-6 text-sm text-gray-500">{{u.email}}</td>
                             <td class="p-6"><span class="px-3 py-1 bg-gray-100 dark:bg-gray-700 rounded-full text-[10px] font-black">{{u.role}}</span></td>
                             <td class="p-6">
-                                {% if user.role == 'ADMIN' and u.username != user.username %}
-                                <button onclick="deleteUser('{{u.username}}')" class="text-red-400"><i data-lucide="trash" class="w-5 h-5"></i></button>
-                                {% endif %}
+                                <div class="flex gap-3">
+                                    {% if user.role == 'ADMIN' %}
+                                    <button onclick="adminChangePass('{{u.username}}')" class="text-blue-500 hover:scale-110 transition"><i data-lucide="key-round" class="w-5 h-5"></i></button>
+                                    {% if u.username != user.username %}
+                                    <button onclick="deleteUser('{{u.username}}')" class="text-red-400 hover:scale-110 transition"><i data-lucide="trash" class="w-5 h-5"></i></button>
+                                    {% endif %}
+                                    {% endif %}
+                                </div>
                             </td>
                         </tr>
                         {% endfor %}
@@ -128,7 +139,7 @@
                         <option value="ssh">SSH</option>
                     </select>
                     <select name="icon" class="input-std w-24">
-                        <option value="server">Server</option><option value="globe">Web</option>
+                        <option value="server">Server</option><option value="globe">Web</option><option value="terminal">SSH</option>
                     </select>
                 </div>
                 <input type="text" name="url_or_ip" placeholder="URL ou IP" class="input-std" required>
@@ -200,9 +211,28 @@
             }
         }
 
+        function deleteService(id) {
+            if(confirm("Supprimer ce service ?")) {
+                fetch('/api/delete_service', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:id}) }).then(()=>location.reload());
+            }
+        }
+
         function createUser() {
             const data = { action: 'add', username: document.getElementById('new-u-name').value, email: document.getElementById('new-u-email').value, password: document.getElementById('new-u-pass').value, role: document.getElementById('new-u-role').value };
             fetch('/api/manage_users', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) }).then(()=>location.reload());
+        }
+
+        function deleteUser(username) {
+            if(confirm("Supprimer l'utilisateur "+username+" ?")) {
+                fetch('/api/manage_users', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action:'delete', username:username}) }).then(()=>location.reload());
+            }
+        }
+
+        function adminChangePass(username) {
+            const n = prompt("Nouveau mot de passe pour "+username+" :");
+            if(n) {
+                fetch('/api/manage_users', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action:'admin_update_pass', username:username, new_pass:n}) }).then(()=>alert("Modifié !"));
+            }
         }
 
         function openShareModal(id) { document.getElementById('share-id').value = id; toggleModal('share-modal'); }
