@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="fr" class="{{ theme }}">
+<head>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script> tailwind.config = { darkMode: 'class' } </script>
+</head>
+<body class="h-screen w-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+    <div class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-xl w-96 text-center border-t-4 border-yellow-400">
+        <div class="mb-6">
+            <span class="text-4xl">🔐</span>
+            <h2 class="text-xl font-bold mt-4 dark:text-white">Vérification d'Identité</h2>
+            <p class="text-sm text-gray-500 mt-2">Répondez à votre question secrète :</p>
+            <p class="font-bold text-blue-500 mt-1">"{{ question }}"</p>
+        </div>
+        
+        <form method="POST">
+            <input type="text" name="answer" placeholder="Votre réponse..." class="w-full p-4 rounded-xl bg-gray-100 dark:bg-gray-700 dark:text-white mb-4 outline-none text-center" required autocomplete="off">
+            {% if error %} <p class="text-red-500 text-xs mb-4">{{ error }}</p> {% endif %}
+            <button type="submit" class="w-full bg-yellow-400 hover:bg-yellow-500 text-black font-bold py-3 rounded-xl">Déverrouiller</button>
+        </form>
+    </div>
+</body>
+</html>

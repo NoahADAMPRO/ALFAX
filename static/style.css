@@ -1,0 +1,27 @@
+:root { --accent: #007aff; }
+[data-theme="dark"] { --bg: #1a1a1a; --sidebar: #2a2a2a; --text: #fff; --tile: #333; }
+[data-theme="light"] { --bg: #f5f5f7; --sidebar: #e5e5e7; --text: #000; --tile: #fff; }
+
+body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; }
+.app-layout { display: flex; height: 100vh; }
+
+/* Sidebar Mac Style */
+.mac-sidebar { width: 200px; background: var(--sidebar); padding: 20px; display: flex; flex-direction: column; }
+.logo { font-weight: 800; font-size: 24px; margin-bottom: 40px; }
+.nav-items { list-style: none; padding: 0; flex-grow: 1; }
+.nav-items li { padding: 10px; border-radius: 8px; cursor: pointer; margin-bottom: 5px; }
+.nav-items li.active { background: var(--accent); color: white; }
+
+/* Dashboard Grid */
+.main-view { flex-grow: 1; padding: 40px; overflow-y: auto; }
+.services-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 20px; }
+.service-tile { background: var(--tile); padding: 20px; border-radius: 12px; text-align: center; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+.service-tile:hover { transform: scale(1.05); }
+.tile-icon { font-size: 30px; margin-bottom: 10px; color: var(--accent); }
+
+/* Setup Animations */
+.mac-setup-card { text-align: center; width: 500px; margin: 100px auto; padding: 50px; background: white; color: black; border-radius: 20px; }
+.btn-mac-primary { background: var(--accent); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; }
+
+/* Modal */
+.modal { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.5); display:none; justify-content:center; align-items:center; }

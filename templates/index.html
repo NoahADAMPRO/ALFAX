@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="fr" class="{{ db.config.theme }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ db.config.logo }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script> tailwind.config = { darkMode: 'class' } </script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@4.19.0/css/xterm.css" />
+    <script src="https://cdn.jsdelivr.net/npm/xterm@4.19.0/lib/xterm.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        body { font-family: 'Poppins', sans-serif; }
+        .nav-btn { width: 100%; display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 15px; color: #6b7280; font-weight: 600; transition: 0.2s; }
+        .nav-btn.active { background: #eff6ff; color: #2563eb; }
+        .dark .nav-btn.active { background: rgba(37,99,235,0.2); color: #60a5fa; }
+        .input-std { width: 100%; padding: 12px; border-radius: 12px; background: #f9fafb; border: 1px solid #e5e7eb; outline: none; }
+        .dark .input-std { background: #374151; border-color: #4b5563; color: white; }
+        .btn-primary { width: 100%; padding: 14px; background: #2563eb; color: white; border-radius: 12px; font-weight: bold; border: none; cursor: pointer; }
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 50; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(8px); }
+        .modal-box { background: white; padding: 2.5rem; border-radius: 2.5rem; width: 450px; }
+        .dark .modal-box { background: #1f2937; color: white; }
+    </style>
+</head>
+<body class="h-screen w-screen flex bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-100 overflow-hidden">
+
+    <aside class="w-72 bg-white dark:bg-gray-800 border-r border-gray-100 dark:border-gray-700 p-6 flex flex-col z-20">
+        <h1 class="text-3xl font-black text-blue-600 mb-10 tracking-tighter">{{ db.config.logo }}</h1>
+        <nav class="space-y-2 flex-1">
+            <button onclick="switchTab('dash')" id="btn-dash" class="nav-btn active"><i data-lucide="layout-grid"></i> Services</button>
+            <button onclick="switchTab('users')" id="btn-users" class="nav-btn"><i data-lucide="users"></i> Utilisateurs</button>
+            <button onclick="switchTab('settings')" id="btn-settings" class="nav-btn"><i data-lucide="settings"></i> Réglages</button>
+        </nav>
+        <div class="flex items-center gap-3 pt-6 border-t border-gray-100 dark:border-gray-700">
+            <img src="{{ user.avatar }}" class="w-10 h-10 rounded-full">
+            <div class="overflow-hidden">
+                <p class="text-sm font-bold truncate">{{ user.username }}</p>
+                <a href="/logout" class="text-[10px] text-red-500 font-black uppercase">Quitter</a>
+            </div>
+        </div>
+    </aside>
+
+    <main class="flex-1 p-10 overflow-y-auto">
+        
+        <div id="view-dash" class="view-section">
+            <div class="flex justify-between items-center mb-8">
+                <h2 class="text-4xl font-black">Dashboard</h2>
+                <button onclick="toggleModal('add-service')" class="bg-black text-white dark:bg-white dark:text-black px-6 py-3 rounded-2xl font-bold flex gap-2"><i data-lucide="plus"></i> Nouveau</button>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {% for s in services %}
+                <div class="group relative bg-white dark:bg-gray-800 p-6 rounded-[2rem] border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-xl transition-all cursor-pointer">
+                    {% if user.role == 'ADMIN' %}
+                    <button onclick="event.stopPropagation(); openShareModal('{{s.id}}')" class="absolute top-4 right-4 p-2 opacity-0 group-hover:opacity-100 bg-gray-50 dark:bg-gray-700 rounded-full transition hover:rotate-90">
+                        <i data-lucide="share-2" class="w-4 h-4 text-blue-500"></i>
+                    </button>
+                    {% endif %}
+                    <div onclick="launchService('{{s.type}}', '{{s.url_or_ip}}', '{{s.name}}', '{{s.ssh_user}}', '{{s.ssh_pass}}')">
+                        <div class="p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-600 w-fit rounded-2xl mb-4"><i data-lucide="{{ s.icon }}"></i></div>
+                        <h3 class="text-xl font-bold">{{ s.name }}</h3>
+                        <p class="text-xs text-gray-400 font-mono">{{ s.url_or_ip }}</p>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div id="view-users" class="view-section hidden">
+            <div class="flex justify-between items-center mb-8">
+                <h2 class="text-3xl font-black">Comptes</h2>
+                {% if user.role == 'ADMIN' %}
+                <button onclick="toggleModal('add-user')" class="bg-blue-600 text-white px-5 py-2 rounded-xl font-bold text-sm">Créer</button>
+                {% endif %}
+            </div>
+            <div class="bg-white dark:bg-gray-800 rounded-[2rem] overflow-hidden border border-gray-100 dark:border-gray-700">
+                <table class="w-full text-left">
+                    <thead class="bg-gray-50 dark:bg-gray-900/50 text-[10px] uppercase font-black text-gray-400">
+                        <tr><th class="p-6">Utilisateur</th><th class="p-6">Email</th><th class="p-6">Rôle</th><th class="p-6">Actions</th></tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                        {% for u in db.users %}
+                        <tr>
+                            <td class="p-6 flex items-center gap-3 font-bold"><img src="{{u.avatar}}" class="w-8 h-8 rounded-full">{{u.username}}</td>
+                            <td class="p-6 text-sm text-gray-500">{{u.email}}</td>
+                            <td class="p-6"><span class="px-3 py-1 bg-gray-100 dark:bg-gray-700 rounded-full text-[10px] font-black">{{u.role}}</span></td>
+                            <td class="p-6">
+                                {% if user.role == 'ADMIN' and u.username != user.username %}
+                                <button onclick="deleteUser('{{u.username}}')" class="text-red-400"><i data-lucide="trash" class="w-5 h-5"></i></button>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="view-settings" class="view-section hidden max-w-2xl">
+            <h2 class="text-3xl font-black mb-8">Réglages</h2>
+            <div class="space-y-6">
+                <div class="bg-white dark:bg-gray-800 p-8 rounded-[2rem] border border-gray-100 dark:border-gray-700">
+                    <h3 class="font-bold mb-4">Personnalisation</h3>
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <button onclick="updateSettings({theme:'light'})" class="p-4 border rounded-2xl hover:bg-gray-50 transition">☀️ Clair</button>
+                        <button onclick="updateSettings({theme:'dark'})" class="p-4 border dark:border-gray-600 rounded-2xl hover:bg-gray-700 transition">🌙 Sombre</button>
+                    </div>
+                    <label class="text-[10px] font-black uppercase text-gray-400">Nom du système</label>
+                    <input type="text" value="{{ db.config.logo }}" class="input-std mt-1" onchange="updateSettings({logo:this.value})">
+                </div>
+                <div class="bg-red-50 dark:bg-red-900/10 p-8 rounded-[2rem] border border-red-100 dark:border-red-900/30">
+                    <h3 class="font-bold text-red-600 mb-4">Zone critique</h3>
+                    <button onclick="startPasswordChange()" class="w-full py-3 bg-white dark:bg-gray-800 border border-red-200 text-red-600 font-bold rounded-xl mb-3">Changer mon mot de passe</button>
+                    <button onclick="deleteSelf()" class="w-full py-3 bg-red-600 text-white font-bold rounded-xl">Supprimer mon compte</button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div id="add-service" class="modal-overlay hidden">
+        <div class="modal-box">
+            <h3 class="text-2xl font-black mb-6">Nouveau Service</h3>
+            <form action="/add_service" method="POST" class="space-y-4">
+                <input type="text" name="name" placeholder="Nom" class="input-std" required>
+                <div class="flex gap-2">
+                    <select name="type" class="input-std flex-1" onchange="document.getElementById('ssh-f').classList.toggle('hidden', this.value!='ssh')">
+                        <option value="link">Lien Web</option>
+                        <option value="ssh">SSH</option>
+                    </select>
+                    <select name="icon" class="input-std w-24">
+                        <option value="server">Server</option><option value="globe">Web</option>
+                    </select>
+                </div>
+                <input type="text" name="url_or_ip" placeholder="URL ou IP" class="input-std" required>
+                <div id="ssh-f" class="hidden p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl space-y-2">
+                    <input type="text" name="ssh_user" placeholder="User" class="input-std">
+                    <input type="password" name="ssh_pass" placeholder="Pass" class="input-std">
+                </div>
+                <button type="submit" class="btn-primary">Enregistrer</button>
+                <button type="button" onclick="toggleModal('add-service')" class="w-full text-center mt-2 text-gray-400 font-bold">Annuler</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="add-user" class="modal-overlay hidden">
+        <div class="modal-box">
+            <h3 class="text-2xl font-black mb-6">Nouvel Utilisateur</h3>
+            <div class="space-y-4">
+                <input type="text" id="new-u-name" placeholder="Username" class="input-std">
+                <input type="email" id="new-u-email" placeholder="Email" class="input-std">
+                <input type="password" id="new-u-pass" placeholder="Password" class="input-std">
+                <select id="new-u-role" class="input-std"><option value="USER">Utilisateur</option><option value="ADMIN">Admin</option></select>
+                <button onclick="createUser()" class="btn-primary">Créer</button>
+                <button type="button" onclick="toggleModal('add-user')" class="w-full text-center mt-2 text-gray-400 font-bold">Annuler</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="share-modal" class="modal-overlay hidden">
+        <div class="modal-box">
+            <h3 class="text-2xl font-black mb-4 text-blue-600">Partage</h3>
+            <p class="text-sm text-gray-400 mb-4">Entrez l'email ou le nom du destinataire :</p>
+            <input type="hidden" id="share-id">
+            <input type="text" id="share-target" placeholder="Email ou Nom" class="input-std mb-4">
+            <button onclick="submitShare()" class="btn-primary">Donner accès</button>
+            <button onclick="toggleModal('share-modal')" class="w-full text-center mt-4 text-gray-400 font-bold">Fermer</button>
+        </div>
+    </div>
+
+    <div id="terminal-overlay" class="fixed inset-0 bg-black z-[100] hidden flex flex-col">
+        <div class="bg-gray-900 p-3 flex justify-between border-b border-gray-800">
+            <span class="text-white font-mono text-xs">ALFAX SSH SESSION</span>
+            <button onclick="location.reload()" class="bg-red-600 text-white px-3 py-1 rounded font-bold text-xs">QUITTER</button>
+        </div>
+        <div id="terminal" class="flex-1 p-4"></div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+        const socket = io();
+
+        function switchTab(tab) {
+            document.querySelectorAll('.view-section').forEach(e => e.classList.add('hidden'));
+            document.getElementById('view-'+tab).classList.remove('hidden');
+            document.querySelectorAll('.nav-btn').forEach(e => e.classList.remove('active'));
+            document.getElementById('btn-'+tab).classList.add('active');
+        }
+
+        function toggleModal(id) { document.getElementById(id).classList.toggle('hidden'); }
+
+        function launchService(type, url, name, user, pass) {
+            if(type === 'link') window.open(url.startsWith('http') ? url : 'http://'+url, '_blank');
+            else {
+                document.getElementById('terminal-overlay').classList.remove('hidden');
+                const term = new Terminal({ cursorBlink: true, theme: { background: '#000000' } });
+                term.open(document.getElementById('terminal'));
+                socket.emit('connect_ssh', { host: url, user: (user!='None'?user:'root'), pass: (pass!='None'?pass:'') });
+                socket.on('ssh_output', d => term.write(d.data));
+                term.onData(i => socket.emit('ssh_input', {input: i}));
+            }
+        }
+
+        function createUser() {
+            const data = { action: 'add', username: document.getElementById('new-u-name').value, email: document.getElementById('new-u-email').value, password: document.getElementById('new-u-pass').value, role: document.getElementById('new-u-role').value };
+            fetch('/api/manage_users', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) }).then(()=>location.reload());
+        }
+
+        function openShareModal(id) { document.getElementById('share-id').value = id; toggleModal('share-modal'); }
+
+        function submitShare() {
+            const data = { service_id: document.getElementById('share-id').value, target: document.getElementById('share-target').value };
+            fetch('/api/share_service', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) }).then(r => r.json()).then(d => {
+                if(d.status==='success') { alert("Partagé !"); toggleModal('share-modal'); } else alert(d.message);
+            });
+        }
+
+        function updateSettings(d) { fetch('/api/update_settings', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(d) }).then(()=>location.reload()); }
+        
+        function deleteSelf() { 
+            if(confirm("Supprimer votre compte ?")) 
+                fetch('/api/manage_users', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action:'delete_self'}) })
+                .then(r=>r.json())
+                .then(d=>window.location.href=d.url); 
+        }
+        
+        function startPasswordChange() { 
+            const p = prompt("Nouveau mot de passe :"); 
+            if(p) fetch('/api/update_password', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({password:p}) }).then(()=>alert("Fait")); 
+        }
+    </script>
+</body>
+</html>
